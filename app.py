@@ -164,17 +164,41 @@ async def webhook(request: Request):
 
     try:
         body = await request.body()
-        print("TRADINGVIEW_RAW:", body.decode("utf-8", errors="replace"))
-        data = json.loads(body.decode("utf-8"))
+        raw = body.decode("utf-8", errors="replace")
+        print("TRADINGVIEW_RAW:", raw)
+
+        # Önce JSON dene
+        try:
+            data = json.loads(raw)
+        except json.JSONDecodeError:
+            # JSON değilse düz metin formatını çöz
+            parts = raw.strip().split("|")
+
+            if len(parts) != 6:
+                raise HTTPException(400, "Geçersiz TradingView mesajı")
+
+            data = {
+                "strategy": parts[0],
+                "action": parts[1],
+                "symbol": parts[2],
+                "price": parts[3],
+                "timeframe": parts[4],
+                "time": parts[5],
+            }
+
+    except HTTPException:
+        raise
     except Exception as e:
-        print("JSON_ERROR:", str(e))
-        raise HTTPException(400, "Geçersiz JSON")
+        print("WEBHOOK_ERROR:", str(e))
+        raise HTTPException(400, "Webhook verisi okunamadı")
 
     required = ["strategy", "action", "symbol", "price", "timeframe"]
+
     if any(k not in data for k in required):
         raise HTTPException(400, f"Eksik alan: {required}")
 
     action = str(data["action"]).upper()
+
     if action not in ("AL", "SAT"):
         raise HTTPException(400, "action AL veya SAT olmalı")
 
@@ -196,7 +220,11 @@ async def webhook(request: Request):
     old = c.execute(
         """SELECT last_action FROM states
            WHERE strategy=? AND symbol=? AND timeframe=?""",
-        (s["strategy"], s["symbol"], s["timeframe"])
+        (
+            s["strategy"],
+            s["symbol"],
+            s["timeframe"]
+        )
     ).fetchone()
 
     duplicate = old and old["last_action"] == action
