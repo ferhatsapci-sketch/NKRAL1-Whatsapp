@@ -319,3 +319,19 @@ async def webhook(request: Request):
         "duplicate_suppressed": bool(duplicate),
         "whatsapp_error": whatsapp_error,
     }
+@app.get("/test-whatsapp")
+def test_whatsapp():
+    test_signal = {
+        "action": "AL",
+        "symbol": "TEST",
+        "timeframe": "4H",
+        "price": "100.00",
+        "signal_time": datetime.datetime.now(datetime.timezone.utc).isoformat(),
+    }
+
+    ok, message = send_whatsapp(test_signal)
+
+    return {
+        "ok": ok,
+        "message": message
+    }
