@@ -260,7 +260,3 @@ async def webhook(request: Request):
         "duplicate_suppressed": bool(duplicate),
         "whatsapp_error": whatsapp_error,
     }
-        "whatsapp_sent": whatsapp_sent,
-        "duplicate_suppressed": bool(duplicate),
-        "whatsapp_error": whatsapp_error,
-    }
