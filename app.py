@@ -63,59 +63,90 @@ def whatsapp_configured():
 def send_whatsapp(s):
     """Send a WhatsApp Business template message via Meta Cloud API.
 
-    Template body variables are expected in this order:
+    WHATSAPP_TO birden fazla numara içerebilir:
+    905xxxxxxxxx,905yyyyyyyyy
+
+    Template body variables:
     {{1}} = action, {{2}} = symbol, {{3}} = timeframe,
     {{4}} = price, {{5}} = signal time.
     """
     if not whatsapp_configured():
         return False, "WhatsApp yapılandırılmamış"
 
+    recipients = [
+        x.strip()
+        for x in WHATSAPP_TO.split(",")
+        if x.strip()
+    ]
+
+    if not recipients:
+        return False, "WhatsApp alıcı numarası yok"
+
     url = (
         f"https://graph.facebook.com/{WHATSAPP_API_VERSION}/"
         f"{WHATSAPP_PHONE_NUMBER_ID}/messages"
     )
-    payload = {
-        "messaging_product": "whatsapp",
-        "to": WHATSAPP_TO,
-        "type": "template",
-        "template": {
-            "name": WHATSAPP_TEMPLATE_NAME,
-            "language": {"code": WHATSAPP_TEMPLATE_LANGUAGE},
-            "components": [{
-                "type": "body",
-                "parameters": [
-                    {"type": "text", "text": s["action"]},
-                    {"type": "text", "text": s["symbol"]},
-                    {"type": "text", "text": s["timeframe"]},
-                    {"type": "text", "text": s["price"]},
-                    {"type": "text", "text": s["signal_time"]},
-                ],
-            }],
-        },
-    }
-    req = URLRequest(
-        url,
-        data=json.dumps(payload).encode("utf-8"),
-        headers={
-            "Authorization": f"Bearer {WHATSAPP_ACCESS_TOKEN}",
-            "Content-Type": "application/json",
-        },
-        method="POST",
-    )
-    try:
-        with urlopen(req, timeout=20) as response:
-            body = response.read().decode("utf-8", errors="replace")
-            if 200 <= response.status < 300:
-                return True, ""
-            return False, body[:1000]
-    except HTTPError as e:
-        body = e.read().decode("utf-8", errors="replace")
-        return False, f"HTTP {e.code}: {body[:1000]}"
-    except URLError as e:
-        return False, f"Bağlantı hatası: {e}"
-    except Exception as e:
-        return False, f"Hata: {e}"
 
+    errors = []
+    sent_count = 0
+
+    for recipient in recipients:
+
+        payload = {
+            "messaging_product": "whatsapp",
+            "to": recipient,
+            "type": "template",
+            "template": {
+                "name": WHATSAPP_TEMPLATE_NAME,
+                "language": {"code": WHATSAPP_TEMPLATE_LANGUAGE},
+                "components": [{
+                    "type": "body",
+                    "parameters": [
+                        {"type": "text", "text": s["action"]},
+                        {"type": "text", "text": s["symbol"]},
+                        {"type": "text", "text": s["timeframe"]},
+                        {"type": "text", "text": s["price"]},
+                        {"type": "text", "text": s["signal_time"]},
+                    ],
+                }],
+            },
+        }
+
+        req = URLRequest(
+            url,
+            data=json.dumps(payload).encode("utf-8"),
+            headers={
+                "Authorization": f"Bearer {WHATSAPP_ACCESS_TOKEN}",
+                "Content-Type": "application/json",
+            },
+            method="POST",
+        )
+
+        try:
+            with urlopen(req, timeout=20) as response:
+                body = response.read().decode("utf-8", errors="replace")
+
+                if 200 <= response.status < 300:
+                    sent_count += 1
+                else:
+                    errors.append(f"{recipient}: {body[:500]}")
+
+        except HTTPError as e:
+            body = e.read().decode("utf-8", errors="replace")
+            errors.append(f"{recipient}: HTTP {e.code}: {body[:500]}")
+
+        except URLError as e:
+            errors.append(f"{recipient}: Bağlantı hatası: {e}")
+
+        except Exception as e:
+            errors.append(f"{recipient}: Hata: {e}")
+
+    if sent_count > 0:
+        if errors:
+            return True, f"{sent_count} alıcıya gönderildi. Hatalar: {' | '.join(errors)}"
+        return True, ""
+
+    return False, "Hiçbir alıcıya gönderilemedi: " + " | ".join(errors)
 
 @app.on_event("startup")
 def startup():
