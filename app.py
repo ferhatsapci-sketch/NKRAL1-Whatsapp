@@ -161,15 +161,14 @@ async def webhook(request: Request):
     token = request.query_params.get("secret", "")
     if token != WEBHOOK_SECRET:
         raise HTTPException(401, "Invalid secret")
-   try:
-    body = await request.body()
-    print("TRADINGVIEW_RAW:", body.decode("utf-8", errors="replace"))
-    data = json.loads(body.decode("utf-8"))
-except Exception as e:
-    print("JSON_ERROR:", str(e))
-    raise HTTPException(400, "Geçersiz JSON")
-    except Exception:
-        raise HTTPException(400, "JSON bekleniyor")
+
+    try:
+        body = await request.body()
+        print("TRADINGVIEW_RAW:", body.decode("utf-8", errors="replace"))
+        data = json.loads(body.decode("utf-8"))
+    except Exception as e:
+        print("JSON_ERROR:", str(e))
+        raise HTTPException(400, "Geçersiz JSON")
 
     required = ["strategy", "action", "symbol", "price", "timeframe"]
     if any(k not in data for k in required):
@@ -185,33 +184,82 @@ except Exception as e:
         "symbol": str(data["symbol"]),
         "price": str(data["price"]),
         "timeframe": str(data["timeframe"]),
-        "signal_time": str(data.get("time", datetime.now(timezone.utc).isoformat()))
+        "signal_time": str(
+            data.get("time", datetime.now(timezone.utc).isoformat())
+        )
     }
+
     now = datetime.now(timezone.utc).isoformat()
 
     c = db()
-    old = c.execute("""SELECT last_action FROM states
-                      WHERE strategy=? AND symbol=? AND timeframe=?""",
-                    (s["strategy"], s["symbol"], s["timeframe"])) .fetchone()
+
+    old = c.execute(
+        """SELECT last_action FROM states
+           WHERE strategy=? AND symbol=? AND timeframe=?""",
+        (s["strategy"], s["symbol"], s["timeframe"])
+    ).fetchone()
+
     duplicate = old and old["last_action"] == action
 
-    c.execute("""INSERT INTO signals(strategy,symbol,action,price,timeframe,signal_time,received_at,whatsapp_sent,whatsapp_error)
-                 VALUES(?,?,?,?,?,?,?,?,?)""",
-              (s["strategy"], s["symbol"], s["action"], s["price"], s["timeframe"], s["signal_time"], now, 0, ""))
+    c.execute(
+        """INSERT INTO signals(
+               strategy,symbol,action,price,timeframe,
+               signal_time,received_at,whatsapp_sent,whatsapp_error
+           )
+           VALUES(?,?,?,?,?,?,?,?,?)""",
+        (
+            s["strategy"],
+            s["symbol"],
+            s["action"],
+            s["price"],
+            s["timeframe"],
+            s["signal_time"],
+            now,
+            0,
+            ""
+        )
+    )
 
     whatsapp_sent = False
     whatsapp_error = ""
+
     if not duplicate:
         whatsapp_sent, whatsapp_error = send_whatsapp(s)
-        c.execute("""UPDATE signals SET whatsapp_sent=?, whatsapp_error=? WHERE id=last_insert_rowid()""",
-                  (1 if whatsapp_sent else 0, whatsapp_error))
-        c.execute("""INSERT INTO states(strategy,symbol,timeframe,last_action)
-                     VALUES(?,?,?,?) ON CONFLICT(strategy,symbol,timeframe)
-                     DO UPDATE SET last_action=excluded.last_action""",
-                  (s["strategy"], s["symbol"], s["timeframe"], action))
-    c.commit(); c.close()
+
+        c.execute(
+            """UPDATE signals
+               SET whatsapp_sent=?, whatsapp_error=?
+               WHERE id=last_insert_rowid()""",
+            (
+                1 if whatsapp_sent else 0,
+                whatsapp_error
+            )
+        )
+
+        c.execute(
+            """INSERT INTO states(
+                   strategy,symbol,timeframe,last_action
+               )
+               VALUES(?,?,?,?)
+               ON CONFLICT(strategy,symbol,timeframe)
+               DO UPDATE SET last_action=excluded.last_action""",
+            (
+                s["strategy"],
+                s["symbol"],
+                s["timeframe"],
+                action
+            )
+        )
+
+    c.commit()
+    c.close()
+
     return {
         "ok": True,
+        "whatsapp_sent": whatsapp_sent,
+        "duplicate_suppressed": bool(duplicate),
+        "whatsapp_error": whatsapp_error,
+    }
         "whatsapp_sent": whatsapp_sent,
         "duplicate_suppressed": bool(duplicate),
         "whatsapp_error": whatsapp_error,
