@@ -145,7 +145,16 @@ def dashboard():
     <div class="box">Takip: <b>4 Saatlik + Günlük</b> | WhatsApp: <b>{status}</b> | Son 200 sinyal</div>
     <table><tr><th>Sembol</th><th>Sinyal</th><th>Fiyat</th><th>Periyot</th><th>Sinyal zamanı</th><th>WhatsApp</th></tr>{trs}</table>
     </body></html>"""
+@app.get("/test")
+async def test_webhook(request: Request):
+    token = request.query_params.get("secret", "")
+    if token != WEBHOOK_SECRET:
+        raise HTTPException(401, "Invalid secret")
 
+    return {
+        "ok": True,
+        "message": "NKRAL1 webhook bağlantısı çalışıyor"
+    }
 
 @app.post("/webhook")
 async def webhook(request: Request):
