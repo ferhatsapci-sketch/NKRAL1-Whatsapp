@@ -163,6 +163,7 @@ async def webhook(request: Request):
         raise HTTPException(401, "Invalid secret")
     try:
         data = await request.json()
+        print("TRADINGVIEW_DATA:", data)
     except Exception:
         raise HTTPException(400, "JSON bekleniyor")
 
