@@ -162,8 +162,14 @@ async def webhook(request: Request):
     if token != WEBHOOK_SECRET:
         raise HTTPException(401, "Invalid secret")
     try:
-        data = await request.json()
-        print("TRADINGVIEW_DATA:", data)
+        body = await request.body()
+print("TRADINGVIEW_RAW:", body.decode("utf-8", errors="replace"))
+
+try:
+    data = json.loads(body.decode("utf-8"))
+except Exception as e:
+    print("JSON_ERROR:", str(e))
+    raise HTTPException(400, "Geçersiz JSON")
     except Exception:
         raise HTTPException(400, "JSON bekleniyor")
 
