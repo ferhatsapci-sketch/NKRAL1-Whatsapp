@@ -1,0 +1,78 @@
+//@version=6
+indicator("NKRAL1 - 4H / Daily Webhook", overlay=true)
+
+// === NKRAL1 settings ===
+a = input.float(1.0, title="HASSASİYET")
+c = input.int(10, title="NKRAL AYARLARI")
+h = input.bool(false, title="FARKLI BAKIŞ")
+
+xATR = ta.atr(c)
+nLoss = a * xATR
+src = h ? request.security(ticker.heikinashi(syminfo.tickerid), timeframe.period, close, lookahead=barmerge.lookahead_off) : close
+
+var float xATRTrailingStop = 0.0
+xATRTrailingStop := src > nz(xATRTrailingStop[1], 0) and src[1] > nz(xATRTrailingStop[1], 0) ? math.max(nz(xATRTrailingStop[1]), src - nLoss) :
+     src < nz(xATRTrailingStop[1], 0) and src[1] < nz(xATRTrailingStop[1], 0) ? math.min(nz(xATRTrailingStop[1]), src + nLoss) :
+     src > nz(xATRTrailingStop[1], 0) ? src - nLoss : src + nLoss
+
+var int pos = 0
+pos := src[1] < nz(xATRTrailingStop[1], 0) and src > nz(xATRTrailingStop[1], 0) ? 1 :
+     src[1] > nz(xATRTrailingStop[1], 0) and src < nz(xATRTrailingStop[1], 0) ? -1 : nz(pos[1], 0)
+
+ema1 = ta.ema(src, 1)
+above = ta.crossover(ema1, xATRTrailingStop)
+below = ta.crossover(xATRTrailingStop, ema1)
+
+buy = src > xATRTrailingStop and above
+sell = src < xATRTrailingStop and below
+
+barbuy = src > xATRTrailingStop
+barsell = src < xATRTrailingStop
+
+plot(xATRTrailingStop, "NKRAL ATR Stop", color=pos == -1 ? color.red : pos == 1 ? color.green : color.blue)
+plotshape(buy, title="AL", text="AL", style=shape.labelup, location=location.belowbar, color=color.green, textcolor=color.white, size=size.tiny)
+plotshape(sell, title="SAT", text="SAT", style=shape.labeldown, location=location.abovebar, color=color.red, textcolor=color.white, size=size.tiny)
+barcolor(barbuy ? color.new(color.green, 75) : barsell ? color.new(color.red, 75) : na)
+
+// === Original indicator visuals retained ===
+bbLen = input.int(20, "BB Length")
+bbMult = input.float(2.0, "BB Mult")
+bbBasis = ta.sma(close, bbLen)
+bbDev = bbMult * ta.stdev(close, bbLen)
+plot(bbBasis, "BB Basis", color=color.orange)
+plot(bbBasis + bbDev, "BB Upper", color=color.new(color.orange, 45))
+plot(bbBasis - bbDev, "BB Lower", color=color.new(color.orange, 45))
+
+plot(ta.ema(src, 5), "EMA 5", color=color.new(color.yellow, 0))
+plot(ta.ema(src, 9), "EMA 9", color=color.new(color.aqua, 0))
+plot(ta.ema(src, 21), "EMA 21", color=color.new(color.blue, 0))
+plot(ta.ema(src, 50), "EMA 50", color=color.new(color.purple, 0))
+plot(ta.ema(src, 100), "EMA 100", color=color.new(color.fuchsia, 0))
+plot(ta.ema(src, 200), "EMA 200", color=color.new(color.gray, 0))
+plot(ta.ema(src, 377), "EMA 377", color=color.new(color.white, 0))
+plot(ta.ema(src, 12), "TRİGER EMA 12", color=color.new(color.lime, 0))
+
+// Ichimoku
+conversionPeriods = input.int(9, "Ichimoku Conversion")
+basePeriods = input.int(26, "Ichimoku Base")
+laggingSpan2Periods = input.int(52, "Ichimoku Span B")
+displacement = input.int(26, "Ichimoku Displacement")
+donchian(len) => math.avg(ta.lowest(len), ta.highest(len))
+conversionLine = donchian(conversionPeriods)
+baseLine = donchian(basePeriods)
+leadLine1 = math.avg(conversionLine, baseLine)
+leadLine2 = donchian(laggingSpan2Periods)
+plot(conversionLine, "Ichimoku Conversion", color=color.new(color.blue, 35))
+plot(baseLine, "Ichimoku Base", color=color.new(color.red, 35))
+p1 = plot(leadLine1, "Ichimoku Span A", color=color.new(color.green, 65), offset=displacement)
+p2 = plot(leadLine2, "Ichimoku Span B", color=color.new(color.red, 65), offset=displacement)
+fill(p1, p2, color=color.new(color.gray, 90))
+
+// Parabolic SAR
+psar = ta.sar(0.02, 0.02, 0.2)
+plot(psar, "Parabolic SAR", style=plot.style_cross, color=color.new(color.black, 0))
+
+// TradingView alert conditions.
+// Use these two conditions when creating Watchlist Alerts.
+alertcondition(buy, title="UT Long", message='{"strategy":"NKRAL1","action":"AL","symbol":"{{exchange}}:{{ticker}}","price":"{{close}}","timeframe":"{{interval}}","time":"{{time}}"}')
+alertcondition(sell, title="UT Short", message='{"strategy":"NKRAL1","action":"SAT","symbol":"{{exchange}}:{{ticker}}","price":"{{close}}","timeframe":"{{interval}}","time":"{{time}}"}')

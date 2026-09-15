@@ -1,0 +1,10 @@
+services:
+  - type: web
+    name: nkral1-whatsapp
+    runtime: docker
+    plan: starter
+    healthCheckPath: /health
+    disk:
+      name: nkral1-data
+      mountPath: /data
+      sizeGB: 1
