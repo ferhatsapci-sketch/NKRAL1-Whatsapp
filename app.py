@@ -326,7 +326,7 @@ def test_whatsapp():
         "symbol": "TEST",
         "timeframe": "4H",
         "price": "100.00",
-        "signal_time": datetime.datetime.now(datetime.timezone.utc).isoformat(),
+       "signal_time": datetime.now().isoformat(),
     }
 
     ok, message = send_whatsapp(test_signal)
